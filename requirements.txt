@@ -1,0 +1,15 @@
+torch
+torchvision
+pytorch-lightning
+gradio
+opencv-python
+PyYAML
+Pillow
+numpy<2
+scikit-learn
+tensorboard
+lime
+matplotlib
+scipy
+scikit-image
+facenet-pytorch

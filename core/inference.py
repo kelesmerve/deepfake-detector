@@ -1,0 +1,167 @@
+import time
+import cv2
+import mimetypes
+import numpy as np
+import torch
+import torch.nn.functional as tF
+from PIL import Image
+
+# Yerel Moduller
+from core.model import load_model
+from core.vision import preprocess, crop_face
+from ui.components import format_verdict
+
+# XAI Modulleri
+from xai import (
+    GradCAM,
+    generate_gradcam_figure,
+    generate_lime_explanation,
+    generate_artifact_analysis,
+    generate_analysis_summary,
+)
+
+# =====================================================================
+# GLOBAL BASLATMALAR
+# =====================================================================
+model = load_model()
+gradcam = GradCAM(model)
+
+# =====================================================================
+# TEMEL CIKARIM (INFERENCE) FONKSIYONLARI
+# =====================================================================
+
+def analyze_image(img):
+    """Tek bir goruntu icin tahmin ve Grad-CAM ciktisi uretir."""
+    tensor = preprocess(img).unsqueeze(0)
+    
+    start = time.time()
+    with torch.no_grad():
+        out = model(tensor)
+        probs = tF.softmax(out, dim=1)[0]
+        conf, pred = torch.max(probs, dim=0)
+    inference_time = time.time() - start
+
+    prediction = pred.item()
+    confidence = conf.item()
+    real_prob = probs[0].item()
+    fake_prob = probs[1].item()
+
+    tensor_grad = preprocess(img).unsqueeze(0)
+    cam = gradcam.generate(tensor_grad, target_class=prediction)
+
+    return prediction, confidence, real_prob, fake_prob, cam, inference_time
+
+
+def _analyze_pil_image(img):
+    """Yuklenmis bir PIL formatindaki goruntuyu tam pipeline'dan gecirir."""
+    img = crop_face(img)
+    
+    prediction, confidence, real_prob, fake_prob, cam, inference_time = analyze_image(img)
+
+    verdict_html = format_verdict("fake" if prediction == 1 else "real", confidence)
+    gradcam_img = generate_gradcam_figure(img, cam)
+    lime_img = generate_lime_explanation(model, img, preprocess)
+    artifact_img = generate_artifact_analysis(img)
+
+    summary = generate_analysis_summary(
+        prediction, confidence, cam, inference_time,
+        is_video=False, num_frames=1
+    )
+
+    return verdict_html, gradcam_img, lime_img, artifact_img, summary, img
+
+
+def _analyze_image_file(path):
+    """Disk uzerindeki bir goruntu dosyasini okuyup analiz eder."""
+    img = Image.open(path).convert("RGB")
+    return _analyze_pil_image(img)
+
+
+def _analyze_video_file(path):
+    """Video dosyasini okuyup belirli karelerden orneklem alarak analiz eder."""
+    cap = cv2.VideoCapture(path)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    num_samples = min(10, total_frames)
+    
+    indices = np.linspace(0, total_frames - 1, num=num_samples, dtype=int)
+
+    all_probs = []
+    all_cams = []
+    first_img = None
+    total_time = 0
+
+    for idx in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+            
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame_rgb)
+        img = crop_face(img)
+        
+        if first_img is None:
+            first_img = img
+
+        prediction, confidence, real_prob, fake_prob, cam, inf_time = analyze_image(img)
+        all_probs.append([real_prob, fake_prob])
+        all_cams.append(cam)
+        total_time += inf_time
+
+    cap.release()
+
+    if not all_probs or first_img is None:
+        return (
+            format_verdict("error", 0),
+            None, None, None,
+            "Error: Could not read video frames.",
+            None,
+        )
+
+    # Sonuclari ortala (Aggregation)
+    avg_probs = np.mean(all_probs, axis=0)
+    final_pred = 1 if avg_probs[1] > avg_probs[0] else 0
+    final_conf = avg_probs[final_pred]
+    avg_cam = np.mean(all_cams, axis=0)
+
+    verdict_html = format_verdict("fake" if final_pred == 1 else "real", final_conf)
+    gradcam_img = generate_gradcam_figure(first_img, avg_cam)
+    lime_img = generate_lime_explanation(model, first_img, preprocess)
+    artifact_img = generate_artifact_analysis(first_img)
+
+    summary = generate_analysis_summary(
+        final_pred, final_conf, avg_cam, total_time,
+        is_video=True, num_frames=len(all_probs)
+    )
+
+    return verdict_html, gradcam_img, lime_img, artifact_img, summary, first_img
+
+
+# =====================================================================
+# ANA ROUTER FONKSIYONU
+# =====================================================================
+
+def predict_file(file_obj):
+    """Gelen dosyanin tipini (resim/video) tespit edip ilgili fonksiyonu cagirir."""
+    if file_obj is None:
+        return (
+            format_verdict("waiting", 0),
+            None, None, None,
+            "Upload an image or video to begin analysis.",
+            None,
+        )
+
+    path = file_obj.name if hasattr(file_obj, 'name') else file_obj
+    mime, _ = mimetypes.guess_type(path)
+
+    if mime and mime.startswith("image"):
+        return _analyze_image_file(path)
+    elif mime and mime.startswith("video"):
+        return _analyze_video_file(path)
+    else:
+        return (
+            format_verdict("error", 0),
+            None, None, None,
+            "Error: Unsupported file type. Please upload JPG, PNG, MP4, or MOV.",
+            None,
+        )
