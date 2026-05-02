@@ -1,67 +1,83 @@
-# 🛡️ Deepfake Detection System
+# 🛡️ Deepfake Detection & Analysis System
 
-Bu proje, görüntü ve videolardaki "Deepfake" (sahte yüz) manipülasyonlarını tespit etmek için geliştirilmiş yapay zeka destekli bir web uygulamasıdır. Proje, yapay zekanın sadece "Gerçek" veya "Sahte" demekle kalmayıp *neden* bu kararı verdiğini kullanıcıya şeffaf bir şekilde sunabilmesi için **Açıklanabilir Yapay Zeka (Explainable AI - XAI)** teknikleriyle donatılmıştır.
+Bu proje, hem görsel (resim ve video) hem de işitsel (ses) medyalardaki "Deepfake" manipülasyonlarını yüksek doğrulukla tespit etmek için geliştirilmiş yapay zeka destekli kapsamlı bir analiz sistemidir. Sistem, sadece "Gerçek" veya "Sahte" sonucunu vermekle kalmayıp kararın *nedenini* **Açıklanabilir Yapay Zeka (XAI - Explainable AI)** teknikleriyle kullanıcıya görsel ve işitsel olarak sunar.
 
-## 🌟 Özellikler
+## ✨ Temel Özellikler
 
-- **Çoklu Format Desteği:** Hem resimler (`.jpg`, `.jpeg`, `.png`) hem de videolar (`.mp4`, `.mov`, `.avi`) üzerinden otomatik analiz.
-- **Canlı Kamera Testi:** Doğrudan bilgisayarınızın kamerasını kullanarak anlık "Deepfake" testi yapabilme.
-- **Gelişmiş Yüz Tespiti (MTCNN):** Yüklenen medyalardaki yüzleri otomatik olarak kırpar ve sadece doğru hedefe odaklanır.
-- **Açıklanabilir Yapay Zeka (XAI) Modülleri:**
-  - **🔥 Grad-CAM:** Yapay zekanın, manipülasyon kararı verirken yüzün tam olarak hangi bölgelerine odaklandığını gösteren ısı haritaları üretir.
-  - **🧩 LIME:** Görseli küçük parçalara (süper pikseller) bölerek hangi parçaların sonucu "Gerçek" veya "Sahte" yapmaya daha çok katkı sağladığını gösterir.
-- **Modern Arayüz:** Gradio tabanlı, etkileşimli, koyu temalı (Galactic Theme) ve son derece kullanımı kolay web paneli.
+- **Görsel Deepfake Tespiti:** Yüz tespit algoritmaları (MTCNN) kullanarak resim (`.jpg`, `.png`) ve videolardaki (`.mp4`, `.avi`) yüz manipülasyonlarını tespit eder.
+- **Ses Deepfake Tespiti (AASIST):** Orijinal insan seslerini ve yapay zeka ile üretilmiş (AI-generated) veya klonlanmış sahte sesleri ayırt eden özel ses analizi.
+- **Canlı Kamera Analizi:** Web kameranızı kullanarak anlık derin sahte kontrolü yapabilme imkanı.
+- **Açıklanabilir Yapay Zeka (XAI) Entegrasyonu:**
+  - **🔥 Grad-CAM:** Görsel manipülasyon tespitinde, modelin yüzün hangi bölgelerine (gözler, dudak çevresi vb.) odaklandığını gösteren ısı haritaları.
+  - **🧩 LIME (Görsel):** Görüntüyü süper piksellere ayırarak hangi bölgelerin "Sahte" veya "Gerçek" kararına katkı sağladığını gösteren parçalı analiz.
+  - **🎙️ SHAP (Ses):** Ses analizinde spektrogram üzerinden hangi frekans/zaman aralıklarının sahtelik kararına yol açtığını görselleştiren açıklanabilirlik.
+- **Kullanıcı Dostu Arayüz:** Gradio tabanlı, modern ve etkileşimli bir kontrol paneli.
 
-## 🛠️ Kullanılan Teknolojiler
+## 📂 Proje Yapısı
 
-- **Derin Öğrenme:** PyTorch, PyTorch Lightning
-- **Yüz Algılama:** Facenet-PyTorch (MTCNN)
-- **Web Arayüzü:** Gradio
-- **XAI Yöntemleri:** Lime, Grad-CAM (Özel implementasyon)
-- **Veri İşleme:** OpenCV, Pillow, NumPy (`<2.0`)
+Daha düzenli ve modüler bir mimariyle geliştirilen projenin güncel klasör yapısı:
 
----
+```text
+Deepfake-Detector/
+├── app.py                   # Ana Gradio web arayüzünü başlatan dosya
+├── requirements.txt         # Proje bağımlılıkları
+├── .gitignore               # Git tarafından takip edilmeyecek dosyalar
+├── README.md                # Proje dokümantasyonu
+├── audio_samples/           # Test amaçlı örnek ses dosyaları (.flac)
+├── core/                    # Çekirdek modeller ve çıkarım (inference) mantığı
+│   ├── inference.py         # Görsel Deepfake analiz pipeline'ı
+│   ├── inference_audio.py   # İşitsel (Ses) Deepfake analiz pipeline'ı
+│   └── model.py             # Model mimarileri
+├── ui/                      # Arayüz bileşenleri
+│   ├── components.py        # Gradio arayüz parçaları (sekmeler, butonlar)
+│   └── theme.py             # Arayüz tema ve CSS ayarları
+├── xai.py                   # Görsel Açıklanabilir AI (Grad-CAM, LIME) metodları
+├── xai_voice.py             # İşitsel Açıklanabilir AI (SHAP vb.) metodları
+├── scamhunter_aasist.py     # Ses deepfake tespiti için AASIST entegrasyonu
+├── models/                  # [Eğitilmiş model ağırlıkları (.pth) buraya konur]
+└── weights/                 # [Ek model ağırlıkları buraya konur]
+```
 
-## 🚀 Kurulum ve Çalıştırma
+## 🚀 Kurulum
 
-Aşağıdaki adımları takip ederek projeyi kendi bilgisayarınızda kolayca ayağa kaldırabilirsiniz.
+Projeyi kendi bilgisayarınızda çalıştırmak için aşağıdaki adımları takip edin:
 
-### 1. Gereksinimlerin Kurulması
-Projenin ana klasöründe bir terminal/komut satırı açın ve aşağıdaki komutla tüm gerekli kütüphaneleri indirin:
+### 1. Depoyu Klonlayın
+```bash
+git clone https://github.com/kullaniciadi/Deepfake-Detector.git
+cd Deepfake-Detector
+```
 
+### 2. Sanal Ortam Oluşturun (Önerilen)
+```bash
+python -m venv .venv
+# Windows için:
+.venv\Scripts\activate
+# macOS/Linux için:
+source .venv/bin/activate
+```
+
+### 3. Bağımlılıkları Yükleyin
 ```bash
 pip install -r requirements.txt
 ```
-*(PyTorch modüllerinin çökmemesi için Numpy sürümü bilinçli olarak `1.x` seviyesinde tutulmuştur.)*
 
-### 2. Model Dosyasının Kontrolü
-Sistemin çalışabilmesi için eğitilmiş yapay zeka ağırlıklarına ihtiyacı vardır. `models/` klasörünün altında `best_model-v3.pth` (veya `best_model.pth` vb.) adlı model dosyanızın bulunduğundan emin olun.
+### 4. Model Ağırlıklarını Ekleyin
+Görsel ve ses analizi modellerinin çalışabilmesi için eğitilmiş ağırlık dosyalarına (`.pth`, `.pt` vb.) ihtiyacınız vardır.
+Bu dosyaları `models/` klasörü altına yerleştirin. (Büyük boyutlu model ağırlıkları `.gitignore` aracılığıyla Github'a yüklenmez).
 
-### 3. Uygulamanın Başlatılması
-Gerekli kurulumları yaptıktan sonra web arayüzünü çalıştırmak için şu komutu girin:
+## 💻 Kullanım
+
+Tüm kurulumlar tamamlandıktan sonra aşağıdaki komut ile web arayüzünü başlatabilirsiniz:
 
 ```bash
-python web-app.py
+python app.py
 ```
 
-Terminalde uygulamanın başlatıldığını gösteren `http://127.0.0.1:7860` benzeri bir adres belirecektir. Bu linke tıklayarak veya tarayıcınıza yapıştırarak sisteme giriş yapabilirsiniz.
+- Terminalde `http://127.0.0.1:7860` şeklinde yerel bir adres belirecektir. Bu linki tarayıcınızda açın.
+- Arayüz üzerinden **Resim/Video** veya **Ses** yükleyerek (veya **audio_samples/** klasöründeki test seslerini kullanarak) analizi başlatın.
+- "Analyze" (Analiz Et) butonuna basarak hem tespiti hem de XAI (Açıklanabilirlik) sonuçlarını saniyeler içinde görüntüleyin.
 
----
+## 🛡️ Yasal Uyarı
 
-## 📂 Proje Dizin Yapısı
-
-- **`web-app.py`** : Gradio arayüzünü ayağa kaldıran, dosya/kamera işlemlerini ve ana analiz boru hattını (pipeline) yöneten ana dosya.
-- **`xai.py`** : Sistemin "Açıklanabilir Yapay Zeka" yeteneklerini sağlayan (Grad-CAM vb.) fonksiyonları içerir.
-- **`requirements.txt`** : Gerekli paketlerin listesi.
-- **`models/`** : Yapay zekanın daha önceden öğrenmiş olduğu derin öğrenme ağırlıklarının (`.pth`) barındırıldığı dizin.
-- **`scratch.py`** : Geliştirme sürecinde kullanılan test ve deneme betiği.
-
----
-
-### Nasıl Kullanılır?
-1. Tarayıcıda açılan sayfaya girin.
-2. Sol taraftaki alana test etmek istediğiniz videoyu veya resmi yükleyin, ya da **kameradan anlık çekim** yapın.
-3. **🔍 Analyze** butonuna basın.
-4. Sistem, analiz sonuçlarını saniyeler içinde sekmeler halinde size sunacaktır (Sonuç, Grad-CAM Haritası, LIME Haritası vb.).
-
-🛡️ *Bu araç, siber güvenlik araştırmaları, medya doğrulaması ve eğitim amaçları için tasarlanmıştır.*
+Bu araç ve kaynak kodları yalnızca siber güvenlik araştırmaları, medya doğrulaması ve eğitim amaçları gözetilerek geliştirilmiştir. Herhangi bir kötüye kullanım durumunda sorumluluk kullanıcıya aittir.

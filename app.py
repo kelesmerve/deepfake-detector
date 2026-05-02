@@ -7,6 +7,7 @@ import mimetypes
 from ui.theme import CUSTOM_CSS, GALACTIC_THEME
 from ui.components import format_verdict
 from core.inference import predict_file, _analyze_pil_image
+from core.inference_audio import analyze_audio
 
 with gr.Blocks(title="Deepfake Detection System — XAI") as demo:
     gr.HTML("""
@@ -18,35 +19,51 @@ with gr.Blocks(title="Deepfake Detection System — XAI") as demo:
         </div>
     """)
 
-    with gr.Row():
-        with gr.Column(scale=3):
-            file_input = gr.File(
-                label="Dosya veya Video Yükle",
-                file_types=[".jpg", ".jpeg", ".png", ".mp4", ".mov", ".avi"],
-                type="filepath",
-            )
-            gr.HTML("<div style='text-align:center; padding: 10px; color:#8b8ba7; font-weight:bold;'>— VEYA —</div>")
-            camera_input = gr.Image(
-                label="Kameradan Anlık Test",
-                sources=["webcam"],
-                type="numpy",
-            )
-        with gr.Column(scale=1, min_width=180):
-            preview = gr.Image(label="Preview", interactive=False, height=180)
-
-    analyze_btn = gr.Button("Analyze", variant="primary", elem_classes=["analyze-btn"], size="lg")
-
-    verdict = gr.HTML(value=format_verdict("waiting", 0))
-
     with gr.Tabs():
-        with gr.TabItem("Grad-CAM"):
-            gradcam_output = gr.Image(label="Grad-CAM Analysis", interactive=False)
-        with gr.TabItem("LIME"):
-            lime_output = gr.Image(label="LIME Explanation", interactive=False)
-        with gr.TabItem("Artifact Analysis"):
-            artifact_output = gr.Image(label="Forensic Analysis", interactive=False)
-        with gr.TabItem("Summary"):
-            summary_output = gr.Markdown(value="*Upload a file and click Analyze to generate a report.*")
+        with gr.TabItem("Görüntü / Video Analizi"):
+            with gr.Row():
+                with gr.Column(scale=3):
+                    file_input = gr.File(
+                        label="Dosya veya Video Yükle",
+                        file_types=[".jpg", ".jpeg", ".png", ".mp4", ".mov", ".avi"],
+                        type="filepath",
+                    )
+                    gr.HTML("<div style='text-align:center; padding: 10px; color:#8b8ba7; font-weight:bold;'>— VEYA —</div>")
+                    camera_input = gr.Image(
+                        label="Kameradan Anlık Test",
+                        sources=["webcam"],
+                        type="numpy",
+                    )
+                with gr.Column(scale=1, min_width=180):
+                    preview = gr.Image(label="Preview", interactive=False, height=180)
+
+            analyze_btn = gr.Button("Analyze Image/Video", variant="primary", elem_classes=["analyze-btn"], size="lg")
+
+            verdict = gr.HTML(value=format_verdict("waiting", 0))
+
+            with gr.Tabs():
+                with gr.TabItem("Grad-CAM"):
+                    gradcam_output = gr.Image(label="Grad-CAM Analysis", interactive=False)
+                with gr.TabItem("LIME"):
+                    lime_output = gr.Image(label="LIME Explanation", interactive=False)
+                with gr.TabItem("Artifact Analysis"):
+                    artifact_output = gr.Image(label="Forensic Analysis", interactive=False)
+                with gr.TabItem("Summary"):
+                    summary_output = gr.Markdown(value="*Upload a file and click Analyze to generate a report.*")
+
+        with gr.TabItem("Ses Analizi"):
+            with gr.Row():
+                with gr.Column(scale=3):
+                    audio_input = gr.Audio(label="Ses Dosyası Yükle veya Kaydet", type="filepath")
+                with gr.Column(scale=1, min_width=180):
+                    pass
+            
+            audio_analyze_btn = gr.Button("Analyze Audio", variant="primary", elem_classes=["analyze-btn"], size="lg")
+            audio_verdict = gr.HTML(value=format_verdict("waiting", 0))
+            
+            with gr.Tabs():
+                with gr.TabItem("Summary"):
+                    audio_summary_output = gr.Markdown(value="*Upload or record an audio file and click Analyze to generate a report.*")
 
     # Event handlers tanımları
     def on_file_change(file_obj):
@@ -85,6 +102,16 @@ with gr.Blocks(title="Deepfake Detection System — XAI") as demo:
     file_input.change(fn=on_file_change, inputs=file_input, outputs=preview)
     camera_input.change(fn=lambda c: Image.fromarray(c) if isinstance(c, np.ndarray) else Image.open(c).convert("RGB") if c else None, inputs=camera_input, outputs=preview)
     analyze_btn.click(fn=on_analyze, inputs=[file_input, camera_input], outputs=[verdict, gradcam_output, lime_output, artifact_output, summary_output])
+
+    def on_analyze_audio(path):
+        if not path:
+            return format_verdict("waiting", 0), "*Please provide an audio file.*"
+        try:
+            return analyze_audio(path)
+        except Exception as e:
+            return format_verdict("error", 0), f"Error: {str(e)}"
+
+    audio_analyze_btn.click(fn=on_analyze_audio, inputs=[audio_input], outputs=[audio_verdict, audio_summary_output])
 
 if __name__ == "__main__":
     demo.launch(theme=GALACTIC_THEME, css=CUSTOM_CSS)

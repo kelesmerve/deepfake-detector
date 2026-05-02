@@ -1,26 +1,15 @@
 import torch
-import timm
-
-class ModelWrapper(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.backbone = timm.create_model('efficientnet_b4', pretrained=False, num_classes=0)
-        self.head = torch.nn.Sequential(
-            torch.nn.BatchNorm1d(1792),
-            torch.nn.ReLU(),
-            torch.nn.Linear(1792, 512),
-            torch.nn.ReLU(),
-            torch.nn.Dropout(0.4),
-            torch.nn.Linear(512, 1)
-        )
-    def forward(self, x):
-        f = self.backbone(x)
-        out = self.head(f)
-        out = out - 0.4
-        return torch.cat([torch.zeros_like(out), out], dim=1)
+from torchvision.models import efficientnet_b0
 
 def load_model(weights_path="models/best_model-v3.pth"):
-    model = ModelWrapper()
-    model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=False)
+    # 1. Base (temel) EfficientNet-B0 mimarisini yukle
+    model = efficientnet_b0(weights=None)
+    
+    # 2. Classifier (siniflandirici) kismini 2 sinif (Real/Fake) uretecek sekilde degistir
+    model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, 2)
+    
+    # 3. Agirliklari SIKI (strict=True) bir sekilde yukle
+    # Eger mimari ve agirliklar uyusmazsa hata verecektir, boylece rastgele agirlik calismasini onleriz.
+    model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
     model.eval()
     return model

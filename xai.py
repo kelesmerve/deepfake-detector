@@ -139,7 +139,7 @@ def generate_gradcam_figure(original_img, cam):
 #  LIME
 # =====================================================================
 
-def generate_lime_explanation(model, original_img, preprocess_fn, num_samples=300):
+def generate_lime_explanation(model, original_img, preprocess_fn, num_samples=50):
     """
     Generate LIME explanation for the image.
     Returns: PIL Image showing LIME superpixel explanation

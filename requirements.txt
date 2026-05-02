@@ -13,3 +13,6 @@ matplotlib
 scipy
 scikit-image
 facenet-pytorch
+torchaudio 
+transformers 
+shap
