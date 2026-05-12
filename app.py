@@ -58,10 +58,15 @@ with gr.Blocks(title="Deepfake Detection System — XAI") as demo:
                 with gr.Column(scale=1, min_width=180):
                     pass
             
-            audio_analyze_btn = gr.Button("Analyze Audio", variant="primary", elem_classes=["analyze-btn"], size="lg")
+            with gr.Row():
+                audio_analyze_btn = gr.Button("Analyze Audio (Fast)", variant="primary", elem_classes=["analyze-btn"], size="lg")
+                audio_xai_btn = gr.Button("Detailed XAI Analysis (Takes 1-2 mins)", variant="secondary", elem_classes=["analyze-btn"], size="lg")
+                
             audio_verdict = gr.HTML(value=format_verdict("waiting", 0))
             
             with gr.Tabs():
+                with gr.TabItem("SHAP Analizi"):
+                    audio_shap_output = gr.Image(label="SHAP Dalga Analizi", interactive=False)
                 with gr.TabItem("Summary"):
                     audio_summary_output = gr.Markdown(value="*Upload or record an audio file and click Analyze to generate a report.*")
 
@@ -105,13 +110,28 @@ with gr.Blocks(title="Deepfake Detection System — XAI") as demo:
 
     def on_analyze_audio(path):
         if not path:
-            return format_verdict("waiting", 0), "*Please provide an audio file.*"
+            return format_verdict("waiting", 0), None, "*Please provide an audio file.*"
         try:
-            return analyze_audio(path)
+            v_html, summ = analyze_audio(path)
+            return v_html, None, summ
         except Exception as e:
-            return format_verdict("error", 0), f"Error: {str(e)}"
+            return format_verdict("error", 0), None, f"Error: {str(e)}"
 
-    audio_analyze_btn.click(fn=on_analyze_audio, inputs=[audio_input], outputs=[audio_verdict, audio_summary_output])
+    def on_analyze_audio_xai(path):
+        if not path:
+            return format_verdict("waiting", 0), None, "*Please provide an audio file.*"
+        try:
+            from core.xai_audio import generate_shap_analysis
+            from core.inference_audio import analyze_audio
+            # Ozet sonucu hizli analizden de alabiliriz ama SHAP ozel bir summary uretir.
+            v_html, _ = analyze_audio(path)
+            shap_img, summary_md = generate_shap_analysis(path)
+            return v_html, shap_img, summary_md
+        except Exception as e:
+            return format_verdict("error", 0), None, f"Error: {str(e)}"
+
+    audio_analyze_btn.click(fn=on_analyze_audio, inputs=[audio_input], outputs=[audio_verdict, audio_shap_output, audio_summary_output])
+    audio_xai_btn.click(fn=on_analyze_audio_xai, inputs=[audio_input], outputs=[audio_verdict, audio_shap_output, audio_summary_output])
 
 if __name__ == "__main__":
     demo.launch(theme=GALACTIC_THEME, css=CUSTOM_CSS)

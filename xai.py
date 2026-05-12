@@ -191,7 +191,7 @@ def generate_lime_explanation(model, original_img, preprocess_fn, num_samples=50
             min_weight=0.01,
         )
         axes[1].imshow(mark_boundaries_custom(temp, mask))
-        label_text = "Fake Indicators" if predicted_label == 1 else "Real Indicators"
+        label_text = "Fake Indicators" if predicted_label == 0 else "Real Indicators"
         axes[1].set_title(label_text, color="#c084fc", fontsize=14, fontweight="bold")
         axes[1].axis("off")
 
@@ -290,7 +290,7 @@ def generate_artifact_analysis(original_img):
 
 def generate_analysis_summary(prediction, confidence, cam, inference_time, is_video=False, num_frames=1):
     """Generate a natural language explanation of the analysis results."""
-    label = "DEEPFAKE" if prediction == 1 else "REAL"
+    label = "DEEPFAKE" if prediction == 0 else "REAL"
     conf_pct = confidence * 100
 
     # Analyze Grad-CAM activation distribution
@@ -338,7 +338,7 @@ def generate_analysis_summary(prediction, confidence, cam, inference_time, is_vi
     lines = []
     lines.append(f"## 🔍 Analysis Result: **{label}**\n")
 
-    if prediction == 1:  # Fake
+    if prediction == 0:  # Fake
         if conf_pct > 85:
             lines.append(f"⚠️ **High confidence deepfake detection** ({conf_pct:.1f}%).\n")
         elif conf_pct > 65:
@@ -379,7 +379,7 @@ def generate_analysis_summary(prediction, confidence, cam, inference_time, is_vi
         lines.append(f"- Method: Multi-frame probability averaging\n")
 
     # Risk level
-    if prediction == 1:
+    if prediction == 0:
         if conf_pct > 90:
             risk = "🔴 CRITICAL"
         elif conf_pct > 75:

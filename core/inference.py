@@ -43,8 +43,8 @@ def analyze_image(img):
 
     prediction = pred.item()
     confidence = conf.item()
-    real_prob = probs[0].item()
-    fake_prob = probs[1].item()
+    fake_prob = probs[0].item()
+    real_prob = probs[1].item()
 
     tensor_grad = preprocess(img).unsqueeze(0)
     cam = gradcam.generate(tensor_grad, target_class=prediction)
@@ -58,7 +58,7 @@ def _analyze_pil_image(img):
     
     prediction, confidence, real_prob, fake_prob, cam, inference_time = analyze_image(img)
 
-    verdict_html = format_verdict("fake" if prediction == 1 else "real", confidence)
+    verdict_html = format_verdict("fake" if prediction == 0 else "real", confidence)
     gradcam_img = generate_gradcam_figure(img, cam)
     lime_img = generate_lime_explanation(model, img, preprocess)
     artifact_img = generate_artifact_analysis(img)
@@ -120,11 +120,11 @@ def _analyze_video_file(path):
 
     # Sonuclari ortala (Aggregation)
     avg_probs = np.mean(all_probs, axis=0)
-    final_pred = 1 if avg_probs[1] > avg_probs[0] else 0
+    final_pred = 0 if avg_probs[0] > avg_probs[1] else 1
     final_conf = avg_probs[final_pred]
     avg_cam = np.mean(all_cams, axis=0)
 
-    verdict_html = format_verdict("fake" if final_pred == 1 else "real", final_conf)
+    verdict_html = format_verdict("fake" if final_pred == 0 else "real", final_conf)
     gradcam_img = generate_gradcam_figure(first_img, avg_cam)
     lime_img = generate_lime_explanation(model, first_img, preprocess)
     artifact_img = generate_artifact_analysis(first_img)
