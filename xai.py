@@ -135,6 +135,60 @@ def generate_gradcam_figure(original_img, cam):
     return fig_to_pil(fig)
 
 
+def generate_gradcam_metrics(cam, prediction, confidence):
+    """Create concise numeric Grad-CAM explanation metrics."""
+    label = "deepfake" if prediction == 0 else "authentic"
+    conf_pct = confidence * 100
+    cam_safe = np.maximum(cam, 0)
+    total_attention = cam_safe.sum() + 1e-8
+
+    coarse = cv2.resize(cam_safe, (7, 7), interpolation=cv2.INTER_AREA)
+    top_region = np.unravel_index(coarse.argmax(), coarse.shape)
+    top_share = coarse[top_region] / (coarse.sum() + 1e-8)
+    strong_area = (cam_safe > 0.60).sum() / cam_safe.size
+
+    region_map = {
+        (0, 0): "upper-left forehead", (0, 1): "upper-left forehead",
+        (0, 2): "forehead", (0, 3): "forehead",
+        (0, 4): "forehead", (0, 5): "upper-right forehead",
+        (0, 6): "upper-right forehead",
+        (1, 0): "left temple", (1, 1): "left temple",
+        (1, 2): "left eye area", (1, 3): "between the eyes",
+        (1, 4): "right eye area", (1, 5): "right temple",
+        (1, 6): "right temple",
+        (2, 0): "left cheek", (2, 1): "left eye area",
+        (2, 2): "left eye", (2, 3): "nose bridge",
+        (2, 4): "right eye", (2, 5): "right eye area",
+        (2, 6): "right cheek",
+        (3, 0): "left cheek", (3, 1): "left cheek",
+        (3, 2): "left nose area", (3, 3): "center nose",
+        (3, 4): "right nose area", (3, 5): "right cheek",
+        (3, 6): "right cheek",
+        (4, 0): "left jaw", (4, 1): "left mouth area",
+        (4, 2): "left mouth", (4, 3): "center mouth",
+        (4, 4): "right mouth", (4, 5): "right mouth area",
+        (4, 6): "right jaw",
+        (5, 0): "left jaw", (5, 1): "left chin area",
+        (5, 2): "left chin", (5, 3): "center chin",
+        (5, 4): "right chin", (5, 5): "right chin area",
+        (5, 6): "right jaw",
+        (6, 0): "lower-left edge", (6, 1): "lower-left edge",
+        (6, 2): "lower chin", (6, 3): "lower chin",
+        (6, 4): "lower chin", (6, 5): "lower-right edge",
+        (6, 6): "lower-right edge",
+    }
+    focus_region = region_map.get(top_region, "central face area")
+
+    return (
+        "### Grad-CAM numeric explanation\n"
+        f"- **Prediction confidence:** {conf_pct:.1f}% for **{label}**.\n"
+        f"- **Strongest focus region:** {focus_region}.\n"
+        f"- **Approx. attention share of this region:** {top_share * 100:.1f}%.\n"
+        f"- **Highly activated area:** {strong_area * 100:.1f}% of the analyzed face crop.\n\n"
+        "*These values summarize model attention, not a guaranteed causal percentage.*"
+    )
+
+
 # =====================================================================
 #  LIME
 # =====================================================================
@@ -207,13 +261,52 @@ def generate_lime_explanation(model, original_img, preprocess_fn, num_samples=50
         axes[2].set_title("All Regions", color="white", fontsize=14, fontweight="bold")
         axes[2].axis("off")
 
+        weights = explanation.local_exp.get(predicted_label, [])
+        metrics_md = generate_lime_metrics(weights, predicted_label)
+
         plt.tight_layout()
-        return fig_to_pil(fig)
+        return fig_to_pil(fig), metrics_md
 
     except ImportError:
-        return _create_error_image("LIME library not installed.\npip install lime")
+        return _create_error_image("LIME library not installed.\npip install lime"), (
+            "### LIME numeric explanation\n"
+            "LIME metrics are unavailable because the LIME library is not installed."
+        )
     except Exception as e:
-        return _create_error_image(f"LIME Error: {str(e)}")
+        return _create_error_image(f"LIME Error: {str(e)}"), (
+            "### LIME numeric explanation\n"
+            f"LIME metrics could not be generated: `{str(e)}`"
+        )
+
+
+def generate_lime_metrics(weights, predicted_label):
+    """Create concise numeric LIME explanation metrics."""
+    label = "deepfake" if predicted_label == 0 else "authentic"
+    if not weights:
+        return (
+            "### LIME numeric explanation\n"
+            "No stable superpixel contribution weights were returned for this image."
+        )
+
+    abs_total = sum(abs(weight) for _, weight in weights) + 1e-8
+    positive = [(segment, weight) for segment, weight in weights if weight > 0]
+    negative = [(segment, weight) for segment, weight in weights if weight < 0]
+    strongest_segment, strongest_weight = max(weights, key=lambda item: abs(item[1]))
+    strongest_share = abs(strongest_weight) / abs_total
+    positive_share = sum(weight for _, weight in positive) / abs_total
+    negative_share = sum(abs(weight) for _, weight in negative) / abs_total
+
+    direction = "supports" if strongest_weight > 0 else "argues against"
+
+    return (
+        "### LIME numeric explanation\n"
+        f"- **Explained class:** **{label}**.\n"
+        f"- **Strongest superpixel:** region #{strongest_segment} {direction} this prediction.\n"
+        f"- **Approx. contribution of strongest region:** {strongest_share * 100:.1f}% of total absolute LIME weight.\n"
+        f"- **Positive evidence:** {positive_share * 100:.1f}%.\n"
+        f"- **Counter-evidence:** {negative_share * 100:.1f}%.\n\n"
+        "*LIME contribution percentages are local approximation weights, not exact causal attribution.*"
+    )
 
 
 def mark_boundaries_custom(image, mask):

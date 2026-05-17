@@ -12,6 +12,7 @@ lime
 matplotlib
 scipy
 scikit-image
+lazy_loader
 facenet-pytorch
 torchaudio 
 transformers 

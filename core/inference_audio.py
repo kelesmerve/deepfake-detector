@@ -93,7 +93,7 @@ def analyze_audio(path: str):
 
     label = "fake" if pred == fake_id else "real"
     
-    verdict_html = format_verdict(label, conf)
+    verdict_html = format_verdict(label, conf, real_prob=real_prob, fake_prob=fake_prob)
     summary = f"### Audio Analysis Results\n\n- **Deepfake Probability:** {fake_prob*100:.2f}%\n- **Authentic Probability:** {real_prob*100:.2f}%\n\n*Note: A threshold of 90% is used for deepfake classification.*"
     
     return verdict_html, summary
