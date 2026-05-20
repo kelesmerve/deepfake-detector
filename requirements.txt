@@ -17,3 +17,7 @@ facenet-pytorch
 torchaudio 
 transformers 
 shap
+slicer
+cloudpickle
+numba
+llvmlite

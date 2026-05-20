@@ -1,0 +1,392 @@
+DEEPFAKE DETECTOR - SES MODULU, KULLANILAN MODEL VE SHAP AUDIO YORUMLAMA
+
+1. SES KISMININ PROJEDEKI AMACI
+
+Bu projede ses modulu, yuklenen veya kaydedilen audio dosyasinin gercek insan sesi mi yoksa yapay zeka ile uretilmis / klonlanmis sahte ses mi oldugunu tahmin etmek icin kullanilir.
+
+Ses modulu iki farkli analiz modu sunar:
+
+1. Fast Audio Analysis
+   - Sadece model tahmini yapar.
+   - Real / Fake olasiliklarini hesaplar.
+   - Sonucu confidence ve risk karti olarak gosterir.
+
+2. Detailed XAI Analysis
+   - Once Fast Audio Analysis ile ayni tahmini yapar.
+   - Sonra SHAP ile ses uzerinde aciklanabilirlik analizi yapar.
+   - Ses dalgasi uzerinde hangi bolumlerin fake kararini destekledigini gorsellestirir.
+
+
+2. SES KISMINDA KULLANILAN ANA DOSYALAR
+
+Ses modulu temel olarak su dosyalarla calisir:
+
+1. app.py
+2. core/inference_audio.py
+3. core/xai_audio.py
+4. ui/components.py
+5. audio_samples/
+6. requirements.txt
+
+
+3. app.py ICINDE SES AKISI
+
+app.py, Gradio arayuzunu kuran ana dosyadir.
+Ses kismi "Audio" sekmesi altindadir.
+
+Arayuzde su elemanlar vardir:
+
+- audio_input:
+  Kullanici ses dosyasi yukler veya mikrofonla kayit alir.
+
+- Fast Audio Analysis butonu:
+  on_analyze_audio fonksiyonunu calistirir.
+
+- Detailed XAI Analysis butonu:
+  on_analyze_audio_xai fonksiyonunu calistirir.
+
+- audio_verdict:
+  Modelin real/fake sonucunu HTML karti olarak gosterir.
+
+- audio_shap_output:
+  SHAP audio explanation gorselini gosterir.
+
+- audio_summary_output:
+  Ses analizinin metin ozetini gosterir.
+
+
+4. FAST AUDIO ANALYSIS NASIL CALISIR?
+
+Fast Audio Analysis butonuna basildiginda app.py icindeki on_analyze_audio fonksiyonu calisir.
+
+Akis:
+
+1. Ses dosyasi var mi kontrol edilir.
+2. Progress bilgisi arayuzde guncellenir.
+3. core/inference_audio.py icindeki analyze_audio(path) fonksiyonu cagrilir.
+4. Model sonucu HTML verdict ve markdown summary olarak doner.
+5. Sonuc arayuze yazdirilir.
+
+Fast analiz sadece tahmin yapar.
+SHAP aciklamasi uretmez.
+
+
+5. DETAILED XAI ANALYSIS NASIL CALISIR?
+
+Detailed XAI Analysis butonuna basildiginda app.py icindeki on_analyze_audio_xai fonksiyonu calisir.
+
+Akis:
+
+1. Ses dosyasi var mi kontrol edilir.
+2. analyze_audio(path) ile once model tahmini yapilir.
+3. core/xai_audio.py icindeki generate_shap_analysis(path) fonksiyonu cagrilir.
+4. SHAP KernelExplainer ile ses uzerinde aciklanabilirlik hesaplanir.
+5. SHAP waveform gorseli uretilir.
+6. Kural tabanli audio summary uretilir.
+7. Verdict, SHAP image ve summary arayuze gonderilir.
+
+Detailed XAI, Fast analizden daha yavastir.
+Cunku SHAP, modeli birden fazla kez calistirarak attribution hesaplar.
+
+
+6. KULLANILAN SES MODELI
+
+Ses analizinde kullanilan model:
+
+garystafford/wav2vec2-deepfake-voice-detector
+
+Kodda bu model core/inference_audio.py dosyasinda su sekilde tanimlidir:
+
+MODEL_ID = "garystafford/wav2vec2-deepfake-voice-detector"
+
+Bu model Hugging Face uzerinden yuklenir.
+Kullanilan siniflar:
+
+- AutoFeatureExtractor
+- AutoModelForAudioClassification
+
+Model tipi:
+
+- Wav2Vec2 tabanli audio classification modeli
+- Pretrained speech forensics / deepfake voice detector
+
+Onemli not:
+Eski README veya sunumlarda AASIST ifadesi gecse bile mevcut kodda aktif olarak kullanilan ses modeli Wav2Vec2 tabanli Hugging Face modelidir.
+Bu nedenle sunumda veya raporda "Wav2Vec2 tabanli ses deepfake tespiti" demek daha dogrudur.
+
+
+7. SES ON ISLEME ADIMLARI
+
+Ses dosyasi core/inference_audio.py icindeki load_audio(path) fonksiyonuyla okunur.
+
+Adimlar:
+
+1. SoundFile ile ses dosyasi okunur.
+2. Ses stereo ise mono hale getirilir.
+   - Yani iki kanal varsa ortalamasi alinir.
+3. Ses float32 tipine donusturulur.
+4. Sample rate 16000 Hz degilse Torchaudio Resample ile 16 kHz'e donusturulur.
+
+Kodda hedef sample rate:
+
+TARGET_SR = 16000
+
+Bu adim gereklidir cunku Wav2Vec2 modeli sesi belirli bir sample rate formatinda bekler.
+
+
+8. MODEL TAHMINI NASIL YAPILIYOR?
+
+analyze_audio(path) fonksiyonu su adimlari izler:
+
+1. load_audio_model() ile model yuklenir.
+2. Ses load_audio(path) ile okunur ve islenir.
+3. AutoFeatureExtractor ile model girdisi hazirlanir.
+4. Model logits uretir.
+5. torch.softmax ile olasiliklar hesaplanir.
+6. Modelin id2label bilgisinden fake/spoof sinif ID'si bulunur.
+7. fake_prob ve real_prob degerleri cikarilir.
+8. fake_prob >= 0.90 ise sonuc fake kabul edilir.
+9. Aksi halde sonuc real kabul edilir.
+
+Karar esigi:
+
+THRESHOLD = 0.90
+
+Yani fake olasiligi yuzde 90 veya uzerindeyse sistem bunu deepfake olarak etiketler.
+Fake olasiligi 90'in altindaysa authentic/real tarafina daha yakin kabul eder.
+
+
+9. FAST AUDIO SONUCUNU NASIL YORUMLAMALIYIZ?
+
+Fast Audio Analysis sonucunda arayuzde iki ana bilgi gorulur:
+
+1. Deepfake Probability
+2. Authentic Probability
+
+Ornek yorum:
+
+- Deepfake Probability: 95%
+  Bu durumda sistem sesin sahte / AI-generated olma ihtimalini yuksek gorur.
+
+- Authentic Probability: 87%
+  Bu durumda sistem sesi gercek insan sesi olarak yorumlamaya daha yakindir.
+
+Ancak karar fake icin 90% threshold ile verildigi icin:
+
+- fake_prob >= 90% ise DEEPFAKE
+- fake_prob < 90% ise AUTHENTIC
+
+Bu esik, yanlis pozitifleri azaltmak icin daha kati tutulmus olabilir.
+
+
+10. SHAP AUDIO EXPLANATION NEDIR?
+
+SHAP Audio Explanation, ses modelinin fake kararini hangi ses bolumlerine dayanarak verdigini aciklamak icin kullanilir.
+
+Kodda core/xai_audio.py dosyasinda generate_shap_analysis(audio_path) fonksiyonu tarafindan uretilir.
+
+SHAP burada modelin fake probability degerini aciklamaya calisir.
+Yani sorusu sudur:
+
+"Sesin hangi zaman noktaları fake olasiligini artirdi veya azaltti?"
+
+
+11. SHAP HESAPLAMASI NASIL YAPILIYOR?
+
+SHAP tarafinda su akis vardir:
+
+1. Ses dosyasi yuklenir.
+2. Model ve feature extractor hazirlanir.
+3. fake_id tespit edilir.
+4. predict_fn adinda bir tahmin fonksiyonu tanimlanir.
+   - Bu fonksiyon verilen ses parcasina fake probability dondurur.
+5. Background veri olarak tamamen sessiz bir waveform kullanilir.
+6. shap.KernelExplainer kurulur.
+7. Ses sinyali icin shap_values hesaplanir.
+
+Kodda gecikmeyi azaltmak icin:
+
+nsamples = 25
+
+kullanilir.
+
+Bu, daha hizli ama yaklasik bir SHAP aciklamasi demektir.
+
+
+12. SHAP AUDIO GORSELINI NASIL OKUMALIYIM?
+
+Detailed XAI Analysis sonucunda SHAP sekmesinde bir grafik gorulur.
+
+Grafikte:
+
+- Gri cizgi:
+  Ses dalgasinin kendisidir.
+  Yani audio waveform.
+
+- Renkli noktalar:
+  SHAP degerlerini gosterir.
+
+- Kirmizi / sicak renkler:
+  O bolgenin fake probability degerini artirdigini gosterir.
+  Yani model bu segmenti sahte sese daha yakin kanit olarak gormus olabilir.
+
+- Mavi / soguk renkler:
+  O bolgenin fake probability degerini azalttigini veya real/authentic karari destekledigini gosterir.
+
+- Nötr / soluk alanlar:
+  Model kararina daha az etki eden bolgelerdir.
+
+Kisaca:
+
+Kirmizi alanlar = fake kararini destekleyen bolgeler
+Mavi alanlar = real/authentic kararini destekleyen veya fake kararina karsi bolgeler
+Gri waveform = sesin zaman icindeki genlik yapisi
+
+
+13. SHAP SUMMARY METNINI NASIL OKUMALIYIM?
+
+SHAP analizi tamamlandiginda Summary sekmesinde kural tabanli bir rapor olusur.
+
+Bu raporda:
+
+- Audio Analysis Result
+- DEEPFAKE veya REAL (AUTHENTIC)
+- Confidence
+- Critical Forensic Indicators
+- Supheli zaman araliklari
+- Model bilgisi
+- Risk seviyesi
+
+yer alir.
+
+Eger sonuc DEEPFAKE ise sistem pozitif SHAP degerleri yuksek olan zaman pencerelerini bulur.
+Kodda zaman penceresi:
+
+0.5 saniye
+
+olarak ayarlanmistir.
+
+Yani sistem sesi 0.5 saniyelik parcalara boler.
+Her pencere icin pozitif SHAP ortalamasina bakar.
+En yuksek ilk 3 pencereyi supheli zaman araliklari olarak raporlar.
+
+Ornek:
+
+Strong synthetic manipulation indicators were detected around 1.5s - 2.0s, 3.0s - 3.5s
+
+Bu su anlama gelir:
+
+Model, sesin bu zaman araliklarinda fake probability degerini artiran izler bulmustur.
+Bu bolgeler TTS, voice cloning veya conversion artifact icerebilir.
+
+
+14. EN SON CIKAN SHAP AUDIO EXPLANATION NASIL YORUMLANIR?
+
+Detailed XAI Analysis sonucunda gordugun son ses ciktisini yorumlamak icin su sirayi izle:
+
+1. Once verdict kartina bak.
+   - DEEPFAKE DETECTED mi?
+   - AUTHENTIC mi?
+   - Confidence yuzdesi kac?
+
+2. Deepfake Probability ve Authentic Probability degerlerini oku.
+   - Fake probability 90% veya ustundeyse sistem fake karari verir.
+   - Fake probability 90% altindaysa sistem authentic tarafina gider.
+
+3. SHAP grafiğindeki renk dagilimina bak.
+   - Kirmizi/sicak bolgeler fazlaysa ve belirli zamanlarda yogunlasmissa, model bu bolgeleri sahte kararini destekleyen kisimlar olarak gormustur.
+   - Mavi/soguk bolgeler baskinsa, model bu kisimlari gercek sese daha yakin yorumlamistir.
+
+4. Kirmizi bolgelerin nerede toplandigina bak.
+   - Baslangicta mi?
+   - Ortada mi?
+   - Sonda mi?
+   - Birkaç kisa segmentte mi, yoksa butun ses boyunca yayilmis mi?
+
+5. Summary sekmesindeki suspicious time araliklarini oku.
+   - Sistem bu araliklari 0.5 saniyelik pencerelerden secmistir.
+   - Bu araliklar modelin fake kararini en cok destekleyen kisimlardir.
+
+6. Yorumu kesin kanit gibi degil, karar destek gibi yap.
+   - SHAP "bu ses kesin sahte" demez.
+   - SHAP "modelin fake kararini en cok bu bolgeler etkiledi" der.
+
+
+15. ORNEK SUNUM YORUMU
+
+Detailed XAI sonucunu sunumda soyle yorumlayabilirsin:
+
+"Bu ekranda ses analizinin aciklanabilirlik sonucunu goruyoruz. Ustte modelin fake olasiligi yer aliyor. Alttaki waveform uzerindeki kirmizi bolgeler, modelin sahte ses kararini destekleyen zaman araliklarini temsil ediyor. Mavi veya notr bolgeler ise fake kararina daha az katkida bulunan ya da authentic tarafa daha yakin bolgelerdir. Summary kisminda sistem bu pozitif SHAP degerlerini 0.5 saniyelik pencereler halinde analiz ederek en supheli zaman araliklarini listeliyor. Bu nedenle SHAP ciktisi bize sadece sonucu degil, modelin sonuca hangi ses segmentleri uzerinden gittigini de gosteriyor."
+
+
+16. DETAILED XAI NEDEN YAVAS CALISIR?
+
+Detailed XAI, Fast Audio Analysis'e gore daha yavas calisir.
+Cunku SHAP modeli tekrar tekrar calistirarak farkli perturbationlar uzerinden katkilar hesaplar.
+
+Kodda nsamples=25 kullanilmasi bu sureyi azaltmak icindir.
+Yine de ses dosyasi uzunsa veya bilgisayar yavas ise Detailed XAI 10-30 saniye veya daha fazla surebilir.
+
+
+17. DETAILED XAI ICIN GEREKLI EK PAKETLER
+
+requirements.txt icinde shap yaziyor.
+Ancak SHAP'in calismasi icin bazi alt bagimliliklar da gerekir.
+
+Detailed XAI testinde gerekli oldugu gorulen paketler:
+
+- shap
+- slicer
+- cloudpickle
+- numba
+- llvmlite
+
+Eger Detailed XAI Error verirse bu paketlerin eksik olup olmadigi kontrol edilmelidir.
+
+Kurulum ornegi:
+
+pip install shap slicer cloudpickle numba llvmlite
+
+
+18. AUDIO SAMPLE DOSYALARI HAKKINDA
+
+audio_samples/ klasorunde test amacli .flac dosyalari vardir.
+
+Ancak bu repo icinde bu sample'larin hangisinin real, hangisinin fake oldugunu gosteren protocol/label dosyasi bulunmamaktadir.
+Bu nedenle bu sample'larla model tahmini test edilebilir ama ground truth karsilastirmasi yapilamaz.
+
+Yani arayuzde gorulen sonuc:
+
+Model tahmini
+
+olarak yorumlanmalidir.
+
+
+19. SES MODULUNUN GUCLU YANLARI
+
+- Ses deepfake tespiti projeye eklenmistir.
+- Wav2Vec2 tabanli pretrained model kullanilir.
+- Fast analiz ile hizli tahmin alinabilir.
+- Detailed XAI ile SHAP tabanli aciklama uretilir.
+- Supheli zaman araliklari raporlanabilir.
+- Gradio arayuzu uzerinden kolayca test edilebilir.
+
+
+20. SES MODULUNUN SINIRLILIKLARI
+
+- Model Hugging Face'ten indirildigi icin ilk calistirmada internet gerekir.
+- Sample dosyalarin ground truth etiketleri repo icinde yoktur.
+- SHAP hesaplamasi yavas olabilir.
+- SHAP ciktisi kesin kanit degil, model davranisi aciklamasidir.
+- 90% threshold kati bir esiktir; sinirda kalan dosyalarda yorum dikkatli yapilmalidir.
+
+
+21. KISA OZET
+
+Ses modulu, Wav2Vec2 tabanli Hugging Face audio classification modeli ile ses dosyasinin deepfake olup olmadigini tahmin eder.
+Ses once okunur, mono hale getirilir, float32'ye cevrilir ve 16 kHz'e resample edilir.
+Fast Audio Analysis sadece tahmin ve olasiliklari verir.
+Detailed XAI Analysis ise SHAP ile waveform uzerinde hangi zaman araliklarinin fake kararini etkiledigini gosterir.
+SHAP grafiğinde kirmizi bolgeler fake kararini destekleyen, mavi bolgeler ise fake kararini azaltan veya authentic tarafa yakin bolgeler olarak yorumlanir.
+Summary kisminda 0.5 saniyelik pencerelerde en supheli zaman araliklari listelenir.
+Bu nedenle SHAP Audio Explanation, sonucun arkasindaki ses segmentlerini anlamak icin kullanilan karar destekleyici bir aciklama aracidir.

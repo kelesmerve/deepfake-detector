@@ -44,6 +44,7 @@ flagged/
 scratch.py
 test.py
 test_aasist.py
+.matplotlib-cache/
 
 # Jupyter
 .ipynb_checkpoints/
